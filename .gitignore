@@ -1,0 +1,6 @@
+venv**/
+.venv**/
+*.png
+*.pdf
+*.log
+sample/
