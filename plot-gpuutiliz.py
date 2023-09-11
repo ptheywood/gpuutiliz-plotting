@@ -13,6 +13,7 @@ CONFIG_SNS_PALETTE = "Dark2"
 CONFIG_SNS_STYLE = "darkgrid"
 CONFIG_FIGSIZE_INCHES = (16, 20)
 CONFIG_XLABEL = "time (s)"
+CONFIG_XLIM = None # (0, None)
 CONFIG_DPI = 96
 SUBPLOTS = [
     {
@@ -20,28 +21,28 @@ SUBPLOTS = [
         "series": [
             {"col": "dev_temp_deg_c", "label": "Temp (c)"},
         ],
-        "lim": (0, None)
+        "yim": (0, None)
     },
     {
         "title": "Power",
         "series": [
             {"col": "dev_power_w", "label": "Power (W)"},
         ],
-        "lim": (0, None)
+        "yim": (0, None)
     },
     {
         "title": "Memory Usage",
         "series": [
             {"col": "dev_mem_used_mb", "label": "Memory Used (MB)"},
         ],
-        "lim": (0, None)
+        "yim": (0, None)
     },
     {
         "title": "GPU Kernels",
         "series": [
             {"col": "dev_util_pc", "label": "GPU %"},
         ],
-        "lim": (0, 101),
+        "yim": (0, 101),
         "ylabel": "Utilisation (%)"
     },
     {
@@ -50,7 +51,7 @@ SUBPLOTS = [
             {"col": "dev_mem_used_pc", "label": "Memory Used %"},
             {"col": "dev_mem_io_pc", "label": "Memory IO %"},
         ],
-        # "lim": (0, 101),
+        # "yim": (0, 101),
         "ylabel": "Utilisation (%)"
     },
 ]
@@ -105,8 +106,10 @@ def main():
                 ax.set(ylabel=series["label"])
 
         # set the ylimit if specified
-        if "lim" in subplot and len(subplot["lim"]) == 2:
-            ax.set(ylim=subplot["lim"])
+        if "ylim" in subplot and len(subplot["ylim"]) == 2:
+            ax.set(ylim=subplot["ylim"])
+        if CONFIG_XLIM is not None and len(CONFIG_XLIM) == 2:
+            ax.set(xlim=CONFIG_XLIM)
         # configure the axis title
         if "title" in subplot and subplot["title"] is not None:
             ax.set(title=subplot["title"])
