@@ -62,6 +62,7 @@ def main():
     parser.add_argument("-i", "--input-dev-filepath", type=pathlib.Path, required=True, help = "path to a gpuutiliz generated device log file")
     parser.add_argument("-o", "--output-filepath", type=pathlib.Path, required=False, help = "path for figure output", default="figure.png")
     parser.add_argument("--title", type=str, help="Figure super title")
+    parser.add_argument("--rolling-mean", type=int, help="Plot a rolling average (mean) of N samples")
     args = parser.parse_args()
 
     # load data
@@ -71,6 +72,12 @@ def main():
     t0 = pd.to_datetime(df["timestamp"][0])
     df["timedelta"] = df["timestamp"] - t0
     df["timedelta"] = df["timedelta"].dt.total_seconds()
+
+    # if a rolling mean is requested, compute the data as appropriate
+    if args.rolling_mean is not None and args.rolling_mean > 1:
+        cols = list(set([series["col"] for subplot in SUBPLOTS for series in subplot["series"]]))
+        for col in cols:
+            df[f"rolling_{col}"] = df[col].rolling(args.rolling_mean).mean().shift(int(-(args.rolling_mean / 2)))
 
     # plot data
     sns.set_context(CONFIG_SNS_CONTEXT, rc={"lines.linewidth": 2.5})  
@@ -88,6 +95,8 @@ def main():
         ax = axes[idx]
         for series in subplot["series"]:
             colour = next(iterable_palette)
+            if args.rolling_mean:
+                colour = (*colour, 0.2)
             sns.lineplot(
                 data=df, 
                 x="timedelta", 
@@ -99,6 +108,19 @@ def main():
                 legend='brief',
                 label=series["label"]
             )
+            rolling_col = f"rolling_{series['col']}"
+            if rolling_col in df.columns:
+                sns.lineplot(
+                    data=df, 
+                    x="timedelta", 
+                    y="rolling_" + series["col"], 
+                    markers = False,
+                    dashes = True,
+                    ax=ax,
+                    color=colour[0:3],
+                    legend='brief',
+                    label="rolling "+ series["label"]
+                )
             # Axis settings
             if CONFIG_XLABEL:
                 ax.set(xlabel=CONFIG_XLABEL)
