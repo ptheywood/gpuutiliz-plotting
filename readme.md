@@ -27,3 +27,9 @@ Sample figure generated via:
 ```
 
 ![Sample figure showing generated sample/gpu-dev-util-sample.png](sample/gpu-dev-util-sample.png)
+
+If the input file contains information for multiple output file paths, then multiple values must be passed to `-o,--output-filepath`, e.g.
+
+```bash
+./plot-gpuutiliz.py -i sample/gpu-dev-util-sample-multigpu.log -o sample/gpu-dev-util-sample-multigpu-1.png sample/gpu-dev-util-sample-multigpu-2.png
+```
