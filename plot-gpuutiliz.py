@@ -60,93 +60,104 @@ def main():
     # cli
     parser = argparse.ArgumentParser(description="Plotting script for willfurnass/gpuutiliz data")
     parser.add_argument("-i", "--input-dev-filepath", type=pathlib.Path, required=True, help = "path to a gpuutiliz generated device log file")
-    parser.add_argument("-o", "--output-filepath", type=pathlib.Path, required=False, help = "path for figure output", default="figure.png")
+    parser.add_argument("-o", "--output-filepath", nargs="+", type=pathlib.Path, required=False, help = "path for figure output", default="figure.png")
     parser.add_argument("--title", type=str, help="Figure super title")
     parser.add_argument("--rolling-mean", type=int, help="Plot a rolling average (mean) of N samples")
     args = parser.parse_args()
 
     # load data
-    df = pd.read_csv(args.input_dev_filepath, delim_whitespace=True)
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    source_df = pd.read_csv(args.input_dev_filepath, delim_whitespace=True)
+    source_df["timestamp"] = pd.to_datetime(source_df["timestamp"])
     # Convert the timestamp to a relative timestamp from the 0th value. 
-    t0 = pd.to_datetime(df["timestamp"][0])
-    df["timedelta"] = df["timestamp"] - t0
-    df["timedelta"] = df["timedelta"].dt.total_seconds()
+    t0 = pd.to_datetime(source_df["timestamp"][0])
+    source_df["timedelta"] = source_df["timestamp"] - t0
+    source_df["timedelta"] = source_df["timedelta"].dt.total_seconds()
 
-    # if a rolling mean is requested, compute the data as appropriate
-    if args.rolling_mean is not None and args.rolling_mean > 1:
-        cols = list(set([series["col"] for subplot in SUBPLOTS for series in subplot["series"]]))
-        for col in cols:
-            df[f"rolling_{col}"] = df[col].rolling(args.rolling_mean).mean().shift(int(-(args.rolling_mean / 2)))
+    # Create one dataframe per unique dev_uuid value in the source dataframe
+    dfs = []
+    for uuid in source_df["dev_uuid"].unique():
+        dfs.append(source_df.query(f'dev_uuid == "{uuid}"'))
 
-    # plot data
-    sns.set_context(CONFIG_SNS_CONTEXT, rc={"lines.linewidth": 2.5})  
-    sns.set_style(CONFIG_SNS_STYLE)
-    
-    subplot_count = len(SUBPLOTS)
-    huecount = sum([len(sp["series"]) for sp in SUBPLOTS])
-    palette = sns.color_palette(CONFIG_SNS_PALETTE, huecount)
-    iterable_palette = itertools.cycle(palette)
-    sns.set_palette(palette)
-    fig, axes = plt.subplots(constrained_layout=True, nrows=subplot_count, sharex="col")
-    fig.set_size_inches(CONFIG_FIGSIZE_INCHES[0], CONFIG_FIGSIZE_INCHES[1])
-    # Plot each subplot
-    for idx, subplot in enumerate(SUBPLOTS):
-        ax = axes[idx]
-        for series in subplot["series"]:
-            colour = next(iterable_palette)
-            if args.rolling_mean:
-                colour = (*colour, 0.2)
-            sns.lineplot(
-                data=df, 
-                x="timedelta", 
-                y=series["col"], 
-                markers = False,
-                dashes = True,
-                ax=ax,
-                color=colour,
-                legend='brief',
-                label=series["label"]
-            )
-            rolling_col = f"rolling_{series['col']}"
-            if rolling_col in df.columns:
+    # Error if the number of output files does not match the number of unique uuids
+
+    if len(dfs) != len(args.output_filepath):
+        raise Exception(f"Eroor: input file contained data for {len(dfs)} GPUs, but only {len(args.output_filepath)} values provided for -o,--output-filepath.")
+
+    for df_idx, df in enumerate(dfs):
+        # if a rolling mean is requested, compute the data as appropriate
+        if args.rolling_mean is not None and args.rolling_mean > 1:
+            cols = list(set([series["col"] for subplot in SUBPLOTS for series in subplot["series"]]))
+            for col in cols:
+                df[f"rolling_{col}"] = df[col].rolling(args.rolling_mean).mean().shift(int(-(args.rolling_mean / 2)))
+
+        # plot data
+        sns.set_context(CONFIG_SNS_CONTEXT, rc={"lines.linewidth": 2.5})  
+        sns.set_style(CONFIG_SNS_STYLE)
+        
+        subplot_count = len(SUBPLOTS)
+        huecount = sum([len(sp["series"]) for sp in SUBPLOTS])
+        palette = sns.color_palette(CONFIG_SNS_PALETTE, huecount)
+        iterable_palette = itertools.cycle(palette)
+        sns.set_palette(palette)
+        fig, axes = plt.subplots(constrained_layout=True, nrows=subplot_count, sharex="col")
+        fig.set_size_inches(CONFIG_FIGSIZE_INCHES[0], CONFIG_FIGSIZE_INCHES[1])
+        # Plot each subplot
+        for idx, subplot in enumerate(SUBPLOTS):
+            ax = axes[idx]
+            for series in subplot["series"]:
+                colour = next(iterable_palette)
+                if args.rolling_mean:
+                    colour = (*colour, 0.2)
                 sns.lineplot(
                     data=df, 
                     x="timedelta", 
-                    y="rolling_" + series["col"], 
+                    y=series["col"], 
                     markers = False,
                     dashes = True,
                     ax=ax,
-                    color=colour[0:3],
+                    color=colour,
                     legend='brief',
-                    label="rolling "+ series["label"]
+                    label=series["label"]
                 )
-            # Axis settings
-            if CONFIG_XLABEL:
-                ax.set(xlabel=CONFIG_XLABEL)
-            if "label" in series and series["label"]:
-                ax.set(ylabel=series["label"])
+                rolling_col = f"rolling_{series['col']}"
+                if rolling_col in df.columns:
+                    sns.lineplot(
+                        data=df, 
+                        x="timedelta", 
+                        y="rolling_" + series["col"], 
+                        markers = False,
+                        dashes = True,
+                        ax=ax,
+                        color=colour[0:3],
+                        legend='brief',
+                        label="rolling "+ series["label"]
+                    )
+                # Axis settings
+                if CONFIG_XLABEL:
+                    ax.set(xlabel=CONFIG_XLABEL)
+                if "label" in series and series["label"]:
+                    ax.set(ylabel=series["label"])
 
-        # set the ylimit if specified
-        if "ylim" in subplot and len(subplot["ylim"]) == 2:
-            ax.set(ylim=subplot["ylim"])
-        if CONFIG_XLIM is not None and len(CONFIG_XLIM) == 2:
-            ax.set(xlim=CONFIG_XLIM)
-        # configure the axis title
-        if "title" in subplot and subplot["title"] is not None:
-            ax.set(title=subplot["title"])
-        if "ylabel" in subplot and subplot["ylabel"]:
-            ax.set(ylabel=subplot["ylabel"])
-        # move the legend via seaborn.
-        sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
-    # Compute the figure super titletitle
-    if args.title is not None:
-        plt.suptitle(args.title)
-    else:
-        plt.suptitle(f"gpuutiliz: {args.input_dev_filepath}")
-    # Save the image
-    args.output_filepath.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(args.output_filepath, dpi=CONFIG_DPI, bbox_inches='tight')
+            # set the ylimit if specified
+            if "ylim" in subplot and len(subplot["ylim"]) == 2:
+                ax.set(ylim=subplot["ylim"])
+            if CONFIG_XLIM is not None and len(CONFIG_XLIM) == 2:
+                ax.set(xlim=CONFIG_XLIM)
+            # configure the axis title
+            if "title" in subplot and subplot["title"] is not None:
+                ax.set(title=subplot["title"])
+            if "ylabel" in subplot and subplot["ylabel"]:
+                ax.set(ylabel=subplot["ylabel"])
+            # move the legend via seaborn.
+            sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
+        # Compute the figure super titletitle
+        if args.title is not None:
+            plt.suptitle(args.title)
+        else:
+            plt.suptitle(f"gpuutiliz: {args.input_dev_filepath}")
+        # Save the image
+        args.output_filepath[df_idx].parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(args.output_filepath[df_idx], dpi=CONFIG_DPI, bbox_inches='tight')
 
 if __name__ == "__main__":
     main()
