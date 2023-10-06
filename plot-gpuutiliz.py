@@ -76,7 +76,7 @@ def main():
     # Create one dataframe per unique dev_uuid value in the source dataframe
     dfs = []
     for uuid in source_df["dev_uuid"].unique():
-        dfs.append(source_df.query(f'dev_uuid == "{uuid}"'))
+        dfs.append(source_df.query(f'dev_uuid == "{uuid}"').copy())
 
     # Error if the number of output files does not match the number of unique uuids
 
